@@ -1,12 +1,21 @@
 from enum import Enum
+from typing import Annotated
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Path, Query
+from pydantic import AfterValidator, BaseModel
 
 
 class ModelName(str, Enum):
     ALEXNET = "alexnet"
     RESNET = "resnet"
     LENET = "lenet"
+
+
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
 
 
 # to disable automatic docs, use these parameters in `FastAPI()`
@@ -55,16 +64,23 @@ async def get_file(file_path: str):
 
 
 @app.get("/items/")
-async def get_items(skip: int = 0, limit: int = 10):
+async def get_items(
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+):
     return fake_items_db[skip : (skip + limit)]
 
 
-@app.get("/query_params/{required_path_param}")
+@app.get("/query-params/{required_path_param}")
 async def query_params(
-    required_path_param: str,
-    required_query_param: str,
-    optional_query_param_with_default: str = "default",
-    optional_query_param: str | None = None,
+    required_path_param: Annotated[str, Path(title="The required path parameter")],
+    required_query_param: Annotated[str, Query(alias="required-query-param")],
+    optional_query_param_with_default: Annotated[
+        str, Query(alias="optional-query-param-with-default")
+    ] = "default",
+    optional_query_param: Annotated[
+        str | None, Query(alias="optional-query-param")
+    ] = None,
 ):
     return {
         "required_path_param": required_path_param,
@@ -72,3 +88,58 @@ async def query_params(
         "optional_query_param_with_default": optional_query_param_with_default,
         "optional_query_param": optional_query_param,
     }
+
+
+@app.post("/items/")
+async def create_item(item: Item):
+    item_dict = item.model_dump()
+    if item.tax is not None:
+        price_with_tax = item.price + item.tax
+        item_dict.update({"price_with_tax": price_with_tax})
+    return item_dict
+
+
+def check_valid_custom(value: str | None) -> str | None:
+    if value == "invalid":
+        raise ValueError("Invalid custom value")
+    return value
+
+
+@app.get("/items/search")
+async def search_items(
+    q: Annotated[
+        str,
+        Query(
+            title="Query string",
+            description="Query string for the items to search",
+            min_length=3,
+        ),
+    ],
+    firms: Annotated[list[str], Query()] = [],
+    firm_list: Annotated[
+        list[str],
+        Query(
+            alias="firm-list",
+            deprecated=True,
+            description="Old field to search for firms, not used anymore",
+        ),
+    ] = [],
+    hidden_query: Annotated[
+        str | None, Query(alias="hidden-query", include_in_schema=False)
+    ] = None,
+    custom: Annotated[
+        str | None, Query(max_length=10), AfterValidator(check_valid_custom)
+    ] = None,
+):
+    if firm_list and not firms:
+        firms = firm_list
+    results = {
+        "items": [item for item in fake_items_db if q in item["item_id"]],
+        "q": q,
+        "firms": firms,
+    }
+    if hidden_query:
+        results.update({"hidden_query": hidden_query})
+    if custom:
+        results.update({"custom": custom})
+    return results
