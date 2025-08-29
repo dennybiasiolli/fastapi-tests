@@ -1,7 +1,9 @@
+from datetime import datetime, time, timedelta
 from enum import Enum
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import FastAPI, Path, Query
+from fastapi import Body, FastAPI, Path, Query
 from pydantic import AfterValidator, BaseModel, Field
 
 
@@ -16,6 +18,17 @@ class Item(BaseModel):
     description: str | None = None
     price: float
     tax: float | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "name": "Item Name",
+                "description": "Item Description",
+                "price": 9.99,
+                "tax": 0.5,
+            }
+        }
+    }
 
 
 class PaginationParams(BaseModel):
@@ -121,15 +134,15 @@ async def search_items(
             min_length=3,
         ),
     ],
-    firms: Annotated[list[str], Query()] = [],
+    firms: Annotated[set[str], Query()] = set(),
     firm_list: Annotated[
-        list[str],
+        set[str],
         Query(
             alias="firm-list",
             deprecated=True,
             description="Old field to search for firms, not used anymore",
         ),
-    ] = [],
+    ] = set(),
     hidden_query: Annotated[
         str | None, Query(alias="hidden-query", include_in_schema=False)
     ] = None,
@@ -149,3 +162,24 @@ async def search_items(
     if custom:
         results.update({"custom": custom})
     return results
+
+
+@app.put("/items/{item_id}")
+async def read_items(
+    item_id: UUID,
+    start_datetime: Annotated[datetime, Body()],
+    end_datetime: Annotated[datetime, Body()],
+    process_after: Annotated[timedelta, Body()],
+    repeat_at: Annotated[time | None, Body()] = None,
+):
+    start_process = start_datetime + process_after
+    duration = end_datetime - start_process
+    return {
+        "item_id": item_id,
+        "start_datetime": start_datetime,
+        "end_datetime": end_datetime,
+        "process_after": process_after,
+        "repeat_at": repeat_at,
+        "start_process": start_process,
+        "duration": duration,
+    }
