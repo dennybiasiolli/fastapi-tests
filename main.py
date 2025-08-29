@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Annotated
 
 from fastapi import FastAPI, Path, Query
-from pydantic import AfterValidator, BaseModel
+from pydantic import AfterValidator, BaseModel, Field
 
 
 class ModelName(str, Enum):
@@ -16,6 +16,11 @@ class Item(BaseModel):
     description: str | None = None
     price: float
     tax: float | None = None
+
+
+class PaginationParams(BaseModel):
+    skip: int = Field(0, ge=0)
+    limit: int = Field(10, ge=1, le=100)
 
 
 # to disable automatic docs, use these parameters in `FastAPI()`
@@ -65,10 +70,11 @@ async def get_file(file_path: str):
 
 @app.get("/items/")
 async def get_items(
-    skip: Annotated[int, Query(ge=0)] = 0,
-    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    pagination_query: Annotated[PaginationParams, Query()],
 ):
-    return fake_items_db[skip : (skip + limit)]
+    return fake_items_db[
+        pagination_query.skip : (pagination_query.skip + pagination_query.limit)
+    ]
 
 
 @app.get("/query-params/{required_path_param}")
