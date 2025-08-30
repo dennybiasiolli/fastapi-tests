@@ -1,10 +1,16 @@
+from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from enum import Enum
 from typing import Annotated
 from uuid import UUID
 
+from dotenv import load_dotenv
 from fastapi import Body, FastAPI, Path, Query
 from pydantic import AfterValidator, BaseModel, Field
+from pydantic_ai import Agent, RunContext
+
+# Load environment variables from .env
+load_dotenv()
 
 
 class ModelName(str, Enum):
@@ -183,3 +189,55 @@ async def read_items(
         "start_process": start_process,
         "duration": duration,
     }
+
+
+# region AI Agent Section
+
+
+@dataclass
+class RequestDependencies:
+    customer_name: str | None = None
+
+
+class RequestOutput(BaseModel):
+    response: str = Field(description="Response to the customer's query")
+    block_nsfw: bool = Field(description="Whether to block query in case it's NSFW")
+    courtesy_level: int = Field(
+        description="Courtesy level of the request", ge=0, le=10
+    )
+
+
+ai_agent = Agent(
+    "google-gla:gemini-2.0-flash",
+    deps_type=RequestDependencies,
+    output_type=RequestOutput,
+    system_prompt=(
+        "You are an helpful online assistant, replying to simple questions "
+        "and evaluating the courtesy level of the request on a scale of 0 to 10. "
+        # "Be concise, reply with one sentence."
+    ),
+)
+
+
+@ai_agent.system_prompt
+async def add_customer_name(ctx: RunContext[RequestDependencies]) -> str:
+    if ctx.deps.customer_name:
+        return f"The customer name is {ctx.deps.customer_name!r}."
+    return "No customer name provided."
+
+
+@app.post("/ai-query")
+async def ai_query(
+    query: Annotated[str, Body(examples=["What is the capital of France?"])],
+    customer_name: Annotated[str | None, Body(examples=["John Doe"])] = None,
+):
+    deps = RequestDependencies(customer_name=customer_name)
+    result = await ai_agent.run(query, deps=deps)
+
+    return {
+        "query": query,
+        "result": result,
+    }
+
+
+# endregion
