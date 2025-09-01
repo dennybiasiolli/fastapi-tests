@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, Path, Query, status
+from fastapi import Body, FastAPI, File, Path, Query, UploadFile, status
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from pydantic_ai import Agent, RunContext
 
@@ -279,6 +279,35 @@ def fake_save_user(user_in: UserIn):
 async def create_user(user_in: UserIn) -> UserOut:
     user_saved = fake_save_user(user_in)
     return UserOut(**user_saved.model_dump())
+
+
+# endregion
+
+
+# region File upload
+
+
+@app.post("/uploadfile/")
+async def create_upload_file(
+    comment: Annotated[str, Body(examples=["This is a test file"])],
+    file: UploadFile,
+    additional_files: Annotated[list[UploadFile], File()] = [],
+):
+    # contents = await file.read()
+    return {
+        "comment": comment,
+        "filename": file.filename,
+        "content_type": file.content_type,
+        "size": file.size,
+        "additional_files": [
+            {
+                "filename": f.filename,
+                "content_type": f.content_type,
+                "size": f.size,
+            }
+            for f in additional_files
+        ],
+    }
 
 
 # endregion
