@@ -5,7 +5,18 @@ from typing import Annotated
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, File, HTTPException, Path, Query, UploadFile, status
+from fastapi import (
+    Body,
+    Depends,
+    FastAPI,
+    File,
+    Header,
+    HTTPException,
+    Path,
+    Query,
+    UploadFile,
+    status,
+)
 from fastapi.encoders import jsonable_encoder
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from pydantic_ai import Agent, RunContext
@@ -47,9 +58,36 @@ class Item(BaseModel):
     }
 
 
+# async def common_parameters(
+#     skip: int = Query(default=0, ge=0),
+#     limit: int = Query(default=10, ge=1, le=100),
+# ):
+#     return {"limit": limit, "skip": skip}
+# CommonDep = Annotated[dict, Depends(common_parameters)]
+
+
 class PaginationParams(BaseModel):
     skip: int = Field(0, ge=0)
     limit: int = Field(10, ge=1, le=100)
+
+
+CommonDep = Annotated[PaginationParams, Depends()]
+
+
+# async def get_db():
+#     db = DBSession()
+#     try:
+#         # Only the code prior to and including the yield statement is executed
+#         # before creating a response
+
+#         # The yielded value is what is injected into path operations
+#         # and other dependencies
+#         yield db
+
+#         # The code following the yield statement is executed
+#         # after creating the response but before sending it
+#     finally:
+#         db.close()
 
 
 # to disable automatic docs, use these parameters in `FastAPI()`
@@ -108,12 +146,8 @@ async def get_file(file_path: str):
 
 
 @app.get("/items/", tags=[Tags.ITEMS])
-async def get_items(
-    pagination_query: Annotated[PaginationParams, Query()],
-):
-    return fake_items_db[
-        pagination_query.skip : (pagination_query.skip + pagination_query.limit)
-    ]
+async def get_items(commons: CommonDep):
+    return fake_items_db[commons.skip : (commons.skip + commons.limit)]
 
 
 items = {"foo": "The Foo Wrestlers"}
@@ -415,6 +449,35 @@ async def partially_update_item_v2(item_id: str, item: ItemV2):
     updated_item = stored_item_model.model_copy(update=update_data)
     items_v2[item_id] = jsonable_encoder(updated_item)
     return updated_item
+
+
+# endregion
+
+
+# region dependencies
+
+
+async def verify_token(x_token: Annotated[str, Header()]):
+    if x_token != "fake-super-secret-token":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="X-Token header invalid"
+        )
+
+
+async def verify_key(x_key: Annotated[str, Header()]):
+    if x_key != "fake-super-secret-key":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="X-Key header invalid"
+        )
+
+
+@app.get(
+    "/items-with-token-and-key/",
+    dependencies=[Depends(verify_token), Depends(verify_key)],
+    tags=[Tags.ITEMS],
+)
+async def read_items_with_token_and_key():
+    return {"message": "Items accessed with valid token and key"}
 
 
 # endregion
