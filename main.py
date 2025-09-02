@@ -6,6 +6,7 @@ from uuid import UUID
 
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, File, HTTPException, Path, Query, UploadFile, status
+from fastapi.encoders import jsonable_encoder
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from pydantic_ai import Agent, RunContext
 
@@ -356,6 +357,64 @@ async def create_upload_file(
             for f in additional_files
         ],
     }
+
+
+# endregion
+
+
+# region PUT and PATCH examples
+
+
+class ItemV2(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    price: float | None = None
+    tax: float = 10.5
+    tags: list[str] = []
+
+
+items_v2 = {
+    "foo": {"name": "Foo", "price": 50.2},
+    "bar": {"name": "Bar", "description": "The bartenders", "price": 62, "tax": 20.2},
+    "baz": {"name": "Baz", "description": None, "price": 50.2, "tax": 10.5, "tags": []},
+}
+
+
+@app.get(
+    "/items-v2/{item_id}",
+    response_model=ItemV2,
+    tags=[Tags.ITEMS],
+    summary="Get an item by ID",
+)
+async def read_item(item_id: str):
+    return items_v2[item_id]
+
+
+@app.put(
+    "/items-v2/{item_id}",
+    response_model=ItemV2,
+    tags=[Tags.ITEMS],
+    summary="Fully update an item by ID",
+)
+async def update_item_v2(item_id: str, item: ItemV2):
+    update_item_encoded = jsonable_encoder(item)
+    items_v2[item_id] = update_item_encoded
+    return update_item_encoded
+
+
+@app.patch(
+    "/items-v2/{item_id}",
+    response_model=ItemV2,
+    tags=[Tags.ITEMS],
+    summary="Partially update an item by ID",
+)
+async def partially_update_item_v2(item_id: str, item: ItemV2):
+    stored_item_data = items_v2[item_id]
+    stored_item_model = ItemV2(**stored_item_data)
+    update_data = item.model_dump(exclude_unset=True)
+    updated_item = stored_item_model.model_copy(update=update_data)
+    items_v2[item_id] = jsonable_encoder(updated_item)
+    return updated_item
 
 
 # endregion
