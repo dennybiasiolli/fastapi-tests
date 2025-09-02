@@ -5,12 +5,21 @@ from typing import Annotated
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, File, Path, Query, UploadFile, status
+from fastapi import Body, FastAPI, File, HTTPException, Path, Query, UploadFile, status
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from pydantic_ai import Agent, RunContext
 
 # Load environment variables from .env
 load_dotenv()
+
+
+class Tags(Enum):
+    USERS = "users"
+    ITEMS = "items"
+    FILES = "files"
+    MODELS = "models"
+    QUERY_PARAMS = "query-params"
+    AI_AGENT = "ai-agent"
 
 
 class ModelName(str, Enum):
@@ -54,22 +63,32 @@ async def root():
     return {"message": "Hello World"}
 
 
-@app.get("/users/me")
+@app.get(
+    "/users/me",
+    tags=[Tags.USERS],
+    summary="Get the current user",
+    description="Retrieve the current authenticated user",
+)
 async def read_user_me():
     return {"user_id": "the current user"}
 
 
-@app.get("/users/{user_id}")
+@app.get(
+    "/users/{user_id}",
+    tags=[Tags.USERS],
+    summary="Get a user by ID",
+    description="Retrieve a user by their unique user ID",
+)
 async def read_user(user_id: int, q: str | None = None):
     return {"user_id": user_id, "query": q}
 
 
-@app.get("/models")
+@app.get("/models", tags=[Tags.MODELS])
 async def get_models():
     return list(ModelName)
 
 
-@app.get("/models/{model_name}")
+@app.get("/models/{model_name}", tags=[Tags.MODELS])
 async def get_model(model_name: ModelName):
     match model_name:
         case ModelName.ALEXNET:
@@ -82,12 +101,12 @@ async def get_model(model_name: ModelName):
             return {"model_name": model_name, "message": "Unmapped model"}
 
 
-@app.get("/files/{file_path:path}")
+@app.get("/files/{file_path:path}", tags=[Tags.FILES], deprecated=True)
 async def get_file(file_path: str):
     return {"file_path": file_path}
 
 
-@app.get("/items/")
+@app.get("/items/", tags=[Tags.ITEMS])
 async def get_items(
     pagination_query: Annotated[PaginationParams, Query()],
 ):
@@ -96,7 +115,19 @@ async def get_items(
     ]
 
 
-@app.get("/query-params/{required_path_param}")
+items = {"foo": "The Foo Wrestlers"}
+
+
+@app.get("/items/{item_id}/", tags=[Tags.ITEMS])
+async def get_item(item_id: str):
+    if item_id not in items:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Item not found"
+        )
+    return items[item_id]
+
+
+@app.get("/query-params/{required_path_param}", tags=[Tags.QUERY_PARAMS])
 async def query_params(
     required_path_param: Annotated[str, Path(title="The required path parameter")],
     required_query_param: Annotated[str, Query(alias="required-query-param")],
@@ -115,8 +146,20 @@ async def query_params(
     }
 
 
-@app.post("/items/")
+@app.post(
+    "/items/",
+    tags=[Tags.ITEMS],
+    summary="Create an item",
+    response_description="The created item",
+)
 async def create_item(item: Item):
+    """
+    Create an item with all the information:
+    - **item_id**: The unique identifier for the item
+    - **description**: A brief description of the item
+    - **price**: The price of the item
+    - **tax**: The tax amount for the item (optional)
+    """
     item_dict = item.model_dump()
     if item.tax is not None:
         price_with_tax = item.price + item.tax
@@ -130,7 +173,7 @@ def check_valid_custom(value: str | None) -> str | None:
     return value
 
 
-@app.get("/items/search")
+@app.get("/items/search", tags=[Tags.ITEMS])
 async def search_items(
     q: Annotated[
         str,
@@ -170,7 +213,7 @@ async def search_items(
     return results
 
 
-@app.put("/items/{item_id}")
+@app.put("/items/{item_id}", tags=[Tags.ITEMS])
 async def read_items(
     item_id: UUID,
     start_datetime: Annotated[datetime, Body()],
@@ -226,7 +269,12 @@ async def add_customer_name(ctx: RunContext[RequestDependencies]) -> str:
     return "No customer name provided."
 
 
-@app.post("/ai-query")
+@app.post(
+    "/ai-query",
+    tags=[Tags.AI_AGENT],
+    summary="AI Query",
+    description="Ask a question to the AI agent",
+)
 async def ai_query(
     query: Annotated[str, Body(examples=["What is the capital of France?"])],
     customer_name: Annotated[str | None, Body(examples=["John Doe"])] = None,
@@ -275,7 +323,7 @@ def fake_save_user(user_in: UserIn):
     return user_in_db
 
 
-@app.post("/user/", status_code=status.HTTP_201_CREATED)
+@app.post("/user/", status_code=status.HTTP_201_CREATED, tags=[Tags.USERS])
 async def create_user(user_in: UserIn) -> UserOut:
     user_saved = fake_save_user(user_in)
     return UserOut(**user_saved.model_dump())
@@ -287,7 +335,7 @@ async def create_user(user_in: UserIn) -> UserOut:
 # region File upload
 
 
-@app.post("/uploadfile/")
+@app.post("/uploadfile/", tags=[Tags.FILES])
 async def create_upload_file(
     comment: Annotated[str, Body(examples=["This is a test file"])],
     file: UploadFile,
