@@ -1,5 +1,8 @@
+import time
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import datetime
+from datetime import time as dt_time
+from datetime import timedelta
 from enum import Enum
 from typing import Annotated
 from uuid import UUID
@@ -14,6 +17,7 @@ from fastapi import (
     HTTPException,
     Path,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -88,6 +92,15 @@ CommonDep = Annotated[PaginationParams, Depends()]
 app = FastAPI()
 
 fake_items_db = [{"item_id": "Foo"}, {"item_id": "Bar"}, {"item_id": "Baz"}]
+
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    process_time = time.perf_counter() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
 
 
 @app.get("/")
@@ -247,7 +260,7 @@ async def read_items(
     start_datetime: Annotated[datetime, Body()],
     end_datetime: Annotated[datetime, Body()],
     process_after: Annotated[timedelta, Body()],
-    repeat_at: Annotated[time | None, Body()] = None,
+    repeat_at: Annotated[dt_time | None, Body()] = None,
 ):
     start_process = start_datetime + process_after
     duration = end_datetime - start_process
