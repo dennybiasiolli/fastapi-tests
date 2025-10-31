@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-ai>=0.8.1",
     "pyjwt>=2.10.1",
     "python-dotenv>=1.1.1",
+    "sqlmodel>=0.0.27",
 ]
 
 [dependency-groups]
