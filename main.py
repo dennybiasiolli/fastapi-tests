@@ -22,6 +22,7 @@ from fastapi import (
     status,
 )
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from pydantic_ai import Agent, RunContext
 
@@ -92,6 +93,22 @@ CommonDep = Annotated[PaginationParams, Depends()]
 app = FastAPI()
 
 fake_items_db = [{"item_id": "Foo"}, {"item_id": "Bar"}, {"item_id": "Baz"}]
+
+
+origins = [
+    "http://localhost.tiangolo.com",
+    "https://localhost.tiangolo.com",
+    "http://localhost",
+    "http://localhost:8080",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.middleware("http")
