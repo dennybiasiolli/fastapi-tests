@@ -21,17 +21,10 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from pydantic_ai import Agent, RunContext
 
+from .models import Tags
+
 # Load environment variables from .env
 load_dotenv()
-
-
-class Tags(Enum):
-    USERS = "users"
-    ITEMS = "items"
-    FILES = "files"
-    MODELS = "models"
-    QUERY_PARAMS = "query-params"
-    AI_AGENT = "ai-agent"
 
 
 class ModelName(str, Enum):
