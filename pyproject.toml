@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi[standard-no-fastapi-cloud-cli]>=0.116.1",
+    "psycopg>=3.2.12",
     "pwdlib[argon2]>=0.3.0",
     "pydantic-ai>=0.8.1",
     "pyjwt>=2.10.1",
